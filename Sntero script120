@@ -1,0 +1,940 @@
+--[[
+	Project: Sntero Script V.3 - Custom Team ESP, Big Headshot & Key System
+]]
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local CoreGui = game:GetService("CoreGui")
+local TweenService = game:GetService("TweenService")
+local HttpService = game:GetService("HttpService")
+local player = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+
+if CoreGui:FindFirstChild("SnteroKeyGUI") then CoreGui.SnteroKeyGUI:Destroy() end
+if CoreGui:FindFirstChild("SnteroScriptGUI") then CoreGui.SnteroScriptGUI:Destroy() end
+
+local currentThemeColor = Color3.fromRGB(0, 255, 65)
+local currentBgColor = Color3.fromRGB(12, 16, 22)
+local currentCardColor = Color3.fromRGB(20, 26, 36)
+
+local KEY_FILE = "SnteroKeyDataV3.json"
+local WEEK_SECONDS = 7 * 24 * 60 * 60 -- أسبوع كامل بالثواني
+
+local function checkSavedKey()
+	if writefile and readfile and isfile and isfile(KEY_FILE) then
+		local success, data = pcall(function()
+			return HttpService:JSONDecode(readfile(KEY_FILE))
+		end)
+		if success and data and data.ExpireTime then
+			if os.time() < data.ExpireTime then
+				return true
+			end
+		end
+	end
+	return false
+end
+
+local function saveKeySession()
+	if writefile then
+		local data = { ExpireTime = os.time() + WEEK_SECONDS }
+		pcall(function()
+			writefile(KEY_FILE, HttpService:JSONEncode(data))
+		end)
+	end
+end
+
+local function launchMainScript()
+	local screenGui = Instance.new("ScreenGui", CoreGui)
+	screenGui.Name = "SnteroScriptGUI"
+	screenGui.ResetOnSpawn = false
+	screenGui.IgnoreGuiInset = true
+
+	local function create(class, parent, props)
+		local inst = Instance.new(class)
+		for k, v in pairs(props) do inst[k] = v end
+		inst.Parent = parent
+		return inst
+	end
+
+	local fovGuiHolder = create("Frame", screenGui, {
+		Size = UDim2.new(0, 300, 0, 300), Position = UDim2.new(0.5, -150, 0.5, -150),
+		BackgroundTransparency = 1, Visible = false, ZIndex = 5
+	})
+	local fovCircleFrame = create("Frame", fovGuiHolder, {
+		Size = UDim2.new(1, 0, 1, 0), Position = UDim2.new(0, 0, 0, 0),
+		BackgroundTransparency = 1
+	})
+	create("UICorner", fovCircleFrame, {CornerRadius = UDim.new(1, 0)})
+	create("UIStroke", fovCircleFrame, {Color = Color3.fromRGB(255, 255, 255), Thickness = 2})
+
+	local warningLbl = create("TextLabel", screenGui, {
+		Size = UDim2.new(0, 420, 0, 52), Position = UDim2.new(0.5, -210, 0, -80),
+		BackgroundColor3 = Color3.fromRGB(20, 20, 25), Font = Enum.Font.GothamBold,
+		Text = "", TextColor3 = Color3.fromRGB(255, 255, 255), TextSize = 14, ZIndex = 100,
+		TextXAlignment = Enum.TextXAlignment.Center, TextYAlignment = Enum.TextYAlignment.Center
+	})
+	create("UICorner", warningLbl, {CornerRadius = UDim.new(0, 10)})
+	create("UIStroke", warningLbl, {Color = Color3.fromRGB(255, 60, 60), Thickness = 2})
+
+	local function showWarning(msg)
+		warningLbl.Text = msg
+		TweenService:Create(warningLbl, TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Position = UDim2.new(0.5, -210, 0, 30)}):Play()
+		task.delay(3.0, function()
+			TweenService:Create(warningLbl, TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {Position = UDim2.new(0.5, -210, 0, -80)}):Play()
+		end)
+	end
+
+	local mainFrame = create("Frame", screenGui, {
+		Size = UDim2.new(0, 540, 0, 440), Position = UDim2.new(0.5, -270, 0.5, -220),
+		BackgroundColor3 = currentBgColor, Active = true, Draggable = true, Visible = true
+	})
+	create("UICorner", mainFrame, {CornerRadius = UDim.new(0, 12)})
+	local mainStroke = create("UIStroke", mainFrame, {Color = currentThemeColor, Thickness = 2})
+
+	local topBar = create("Frame", mainFrame, {
+		Size = UDim2.new(1, 0, 0, 40), BackgroundColor3 = currentCardColor
+	})
+	create("UICorner", topBar, {CornerRadius = UDim.new(0, 12)})
+
+	create("TextLabel", topBar, {
+		Size = UDim2.new(1, -60, 1, 0), Position = UDim2.new(0, 15, 0, 0),
+		BackgroundTransparency = 1, Font = Enum.Font.GothamBold, Text = "Sntero script V.3",
+		TextColor3 = Color3.fromRGB(255, 255, 255), TextSize = 14, TextXAlignment = Enum.TextXAlignment.Left
+	})
+
+	local hideBtn = create("TextButton", topBar, {
+		Size = UDim2.new(0, 28, 0, 28), Position = UDim2.new(1, -36, 0, 6),
+		BackgroundColor3 = currentCardColor, Font = Enum.Font.GothamBold, Text = "-",
+		TextColor3 = Color3.fromRGB(255, 255, 255), TextSize = 16
+	})
+	create("UICorner", hideBtn, {CornerRadius = UDim.new(0, 6)})
+
+	local openBtn = create("TextButton", screenGui, {
+		Size = UDim2.new(0, 130, 0, 40), Position = UDim2.new(0, 20, 0.5, -20),
+		BackgroundColor3 = currentBgColor, Font = Enum.Font.GothamBold, Text = "Sntero script V.3",
+		TextColor3 = Color3.fromRGB(255, 255, 255), TextSize = 13, Visible = false, Active = true, Draggable = true
+	})
+	create("UICorner", openBtn, {CornerRadius = UDim.new(0, 8)})
+	local openStroke = create("UIStroke", openBtn, {Color = currentThemeColor, Thickness = 2})
+
+	hideBtn.MouseButton1Click:Connect(function() mainFrame.Visible = false openBtn.Visible = true end)
+	openBtn.MouseButton1Click:Connect(function() mainFrame.Visible = true openBtn.Visible = false end)
+
+	local sidebar = create("Frame", mainFrame, {
+		Size = UDim2.new(0, 135, 1, -48), Position = UDim2.new(0, 0, 0, 44),
+		BackgroundTransparency = 1
+	})
+	create("UIListLayout", sidebar, {Padding = UDim.new(0, 6), HorizontalAlignment = Enum.HorizontalAlignment.Center})
+
+	local container = create("Frame", mainFrame, {
+		Size = UDim2.new(1, -145, 1, -48), Position = UDim2.new(0, 140, 0, 44),
+		BackgroundTransparency = 1
+	})
+
+	local pages = {}
+	local function createPage(name)
+		local page = create("ScrollingFrame", container, {
+			Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1,
+			CanvasSize = UDim2.new(0, 0, 0, 1200), ScrollBarThickness = 4, Visible = false
+		})
+		create("UIListLayout", page, {Padding = UDim.new(0, 8), HorizontalAlignment = Enum.HorizontalAlignment.Center})
+		pages[name] = page
+		return page
+	end
+
+	local function showPage(name)
+		for _, p in pairs(pages) do p.Visible = false end
+		if pages[name] then pages[name].Visible = true end
+	end
+
+	local pHome = createPage("Home")
+	local pChar = createPage("Character")
+	local pTarget = createPage("Target")
+	local pMisc = createPage("Misc")
+	local pSettings = createPage("Settings")
+
+	showPage("Home")
+
+	local function addTabButton(name, callback)
+		local btn = create("TextButton", sidebar, {
+			Size = UDim2.new(0, 120, 0, 36), BackgroundColor3 = currentCardColor,
+			Font = Enum.Font.GothamBold, Text = name, TextColor3 = Color3.fromRGB(255, 255, 255), TextSize = 13
+		})
+		create("UICorner", btn, {CornerRadius = UDim.new(0, 8)})
+		create("UIStroke", btn, {Color = Color3.fromRGB(50, 60, 75), Thickness = 1})
+		btn.MouseButton1Click:Connect(callback)
+	end
+
+	addTabButton("الرئيسية", function() showPage("Home") end)
+	addTabButton("اللاعب", function() showPage("Character") end)
+	addTabButton("استهداف", function() showPage("Target") end)
+	addTabButton("إضافات", function() showPage("Misc") end)
+	addTabButton("الإعدادات", function() showPage("Settings") end)
+
+	local function addCard(parent, height)
+		local card = create("Frame", parent, {Size = UDim2.new(1, -10, 0, height), BackgroundColor3 = currentCardColor})
+		create("UICorner", card, {CornerRadius = UDim.new(0, 10)})
+		create("UIStroke", card, {Color = Color3.fromRGB(45, 55, 70), Thickness = 1})
+		return card
+	end
+
+	local function addToggle(card, title, callback)
+		create("TextLabel", card, {
+			Size = UDim2.new(1, -95, 1, 0), Position = UDim2.new(0, 12, 0, 0),
+			BackgroundTransparency = 1, Font = Enum.Font.GothamBold, Text = title,
+			TextColor3 = Color3.fromRGB(255, 255, 255), TextSize = 14, TextXAlignment = Enum.TextXAlignment.Left
+		})
+		
+		local btn = create("TextButton", card, {
+			Size = UDim2.new(0, 76, 0, 32), Position = UDim2.new(1, -86, 0.5, -16),
+			BackgroundColor3 = Color3.fromRGB(25, 32, 44), Font = Enum.Font.GothamBold, Text = "OFF",
+			TextColor3 = Color3.fromRGB(255, 255, 255), TextSize = 14
+		})
+		create("UICorner", btn, {CornerRadius = UDim.new(0, 8)})
+		local btnStroke = create("UIStroke", btn, {Color = Color3.fromRGB(70, 80, 95), Thickness = 1.5})
+		
+		local state = false
+		btn.MouseButton1Click:Connect(function()
+			state = not state
+			if state then
+				btn.Text = "ON"
+				btn.BackgroundColor3 = currentThemeColor
+				btnStroke.Color = Color3.fromRGB(255, 255, 255)
+			else
+				btn.Text = "OFF"
+				btn.BackgroundColor3 = Color3.fromRGB(25, 32, 44)
+				btnStroke.Color = Color3.fromRGB(70, 80, 95)
+			end
+			callback(state)
+		end)
+	end
+
+	local function addTargetToggle(card, title, callback)
+		create("TextLabel", card, {
+			Size = UDim2.new(1, -95, 1, 0), Position = UDim2.new(0, 12, 0, 0),
+			BackgroundTransparency = 1, Font = Enum.Font.GothamBold, Text = title,
+			TextColor3 = Color3.fromRGB(255, 255, 255), TextSize = 14, TextXAlignment = Enum.TextXAlignment.Left
+		})
+		
+		local btn = create("TextButton", card, {
+			Size = UDim2.new(0, 76, 0, 32), Position = UDim2.new(1, -86, 0.5, -16),
+			BackgroundColor3 = Color3.fromRGB(25, 32, 44), Font = Enum.Font.GothamBold, Text = "OFF",
+			TextColor3 = Color3.fromRGB(255, 255, 255), TextSize = 14
+		})
+		create("UICorner", btn, {CornerRadius = UDim.new(0, 8)})
+		local btnStroke = create("UIStroke", btn, {Color = Color3.fromRGB(70, 80, 95), Thickness = 1.5})
+		
+		local state = false
+		btn.MouseButton1Click:Connect(function()
+			state = not state
+			if state then
+				btn.Text = "ON"
+				btn.BackgroundColor3 = currentThemeColor
+				btnStroke.Color = Color3.fromRGB(255, 255, 255)
+			else
+				btn.Text = "OFF"
+				btn.BackgroundColor3 = Color3.fromRGB(25, 32, 44)
+				btnStroke.Color = Color3.fromRGB(70, 80, 95)
+			end
+			callback(state)
+		end)
+	end
+
+	-- صفحة Home
+	local homeCard = addCard(pHome, 150)
+	local thumbImg = create("ImageLabel", homeCard, {
+		Size = UDim2.new(0, 90, 0, 90), Position = UDim2.new(0, 12, 0, 12),
+		BackgroundColor3 = currentBgColor, Image = Players:GetUserThumbnailAsync(player.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size420x420)
+	})
+	create("UICorner", thumbImg, {CornerRadius = UDim.new(0, 8)})
+	create("UIStroke", thumbImg, {Color = currentThemeColor, Thickness = 1.5})
+
+	create("TextLabel", homeCard, {
+		Size = UDim2.new(1, -115, 0, 22), Position = UDim2.new(0, 112, 0, 15),
+		BackgroundTransparency = 1, Font = Enum.Font.GothamBold, Text = "اسم اللاعب: " .. player.Name,
+		TextColor3 = Color3.fromRGB(255, 255, 255), TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left
+	})
+	create("TextLabel", homeCard, {
+		Size = UDim2.new(1, -115, 0, 22), Position = UDim2.new(0, 112, 0, 42),
+		BackgroundTransparency = 1, Font = Enum.Font.GothamBold, Text = "الاسم المستعار: " .. player.DisplayName,
+		TextColor3 = Color3.fromRGB(255, 255, 255), TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left
+	})
+	create("TextLabel", homeCard, {
+		Size = UDim2.new(1, -115, 0, 22), Position = UDim2.new(0, 112, 0, 69),
+		BackgroundTransparency = 1, Font = Enum.Font.GothamBold, Text = "رقم الآي دي: " .. player.UserId,
+		TextColor3 = Color3.fromRGB(255, 255, 255), TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left
+	})
+
+	-- صفحة Target
+	local targetTopCard = addCard(pTarget, 140)
+
+	local targetSkinBox = create("Frame", targetTopCard, {
+		Size = UDim2.new(0, 110, 0, 110), Position = UDim2.new(0, 12, 0, 12),
+		BackgroundColor3 = currentBgColor
+	})
+	create("UICorner", targetSkinBox, {CornerRadius = UDim.new(0, 8)})
+	create("UIStroke", targetSkinBox, {Color = currentThemeColor, Thickness = 1.5})
+
+	local targetThumb = create("ImageLabel", targetSkinBox, {
+		Size = UDim2.new(1, -8, 1, -8), Position = UDim2.new(0, 4, 0, 4),
+		BackgroundTransparency = 1, Image = ""
+	})
+	create("UICorner", targetThumb, {CornerRadius = UDim.new(0, 6)})
+
+	local targetBox = create("TextBox", targetTopCard, {
+		Size = UDim2.new(1, -135, 0, 32), Position = UDim2.new(0, 130, 0, 12),
+		BackgroundColor3 = Color3.fromRGB(25, 32, 44), Font = Enum.Font.GothamBold, PlaceholderText = "اكتب اسم اللاعب هنا...",
+		Text = "", TextColor3 = Color3.fromRGB(255, 255, 255), TextSize = 13, TextXAlignment = Enum.TextXAlignment.Center, ClearTextOnFocus = false
+	})
+	create("UICorner", targetBox, {CornerRadius = UDim.new(0, 6)})
+	create("UIStroke", targetBox, {Color = currentThemeColor, Thickness = 1.5})
+
+	local infoUserId = create("TextLabel", targetTopCard, {
+		Size = UDim2.new(1, -135, 0, 20), Position = UDim2.new(0, 130, 0, 52),
+		BackgroundTransparency = 1, Font = Enum.Font.GothamBold, Text = "رقم الآي دي: ",
+		TextColor3 = Color3.fromRGB(255, 255, 255), TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left
+	})
+
+	local infoDisplay = create("TextLabel", targetTopCard, {
+		Size = UDim2.new(1, -135, 0, 20), Position = UDim2.new(0, 130, 0, 74),
+		BackgroundTransparency = 1, Font = Enum.Font.GothamBold, Text = "الاسم المستعار: ",
+		TextColor3 = Color3.fromRGB(255, 255, 255), TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left
+	})
+
+	local infoJoined = create("TextLabel", targetTopCard, {
+		Size = UDim2.new(1, -135, 0, 20), Position = UDim2.new(0, 130, 0, 96),
+		BackgroundTransparency = 1, Font = Enum.Font.GothamBold, Text = "عمر الحساب: ",
+		TextColor3 = Color3.fromRGB(255, 255, 255), TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left
+	})
+
+	local selectedTargetPlayer = nil
+
+	targetBox:GetPropertyChangedSignal("Text"):Connect(function()
+		local input = string.lower(targetBox.Text)
+		selectedTargetPlayer = nil
+		if input ~= "" then
+			for _, p in pairs(Players:GetPlayers()) do
+				if p ~= player then
+					local pName = string.lower(p.Name)
+					local pDisplay = string.lower(p.DisplayName)
+					if pName == input or pDisplay == input or string.find(pName, input) or string.find(pDisplay, input) then
+						selectedTargetPlayer = p
+						pcall(function()
+							targetThumb.Image = Players:GetUserThumbnailAsync(p.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size420x420)
+							infoUserId.Text = "رقم الآي دي: " .. p.UserId
+							infoDisplay.Text = "الاسم المستعار: " .. p.DisplayName
+							infoJoined.Text = "عمر الحساب: " .. math.floor(p.AccountAge / 365) .. " سنة"
+						end)
+						break
+					end
+				end
+			end
+		end
+		if not selectedTargetPlayer then
+			targetThumb.Image = ""
+			infoUserId.Text = "رقم الآي دي: "
+			infoDisplay.Text = "الاسم المستعار: "
+			infoJoined.Text = "عمر الحساب: "
+		end
+	end)
+
+	Players.PlayerRemoving:Connect(function(removedPlayer)
+		if removedPlayer == selectedTargetPlayer then
+			targetBox.Text = ""
+			selectedTargetPlayer = nil
+			targetThumb.Image = ""
+			infoUserId.Text = "رقم الآي دي: "
+			infoDisplay.Text = "الاسم المستعار: "
+			infoJoined.Text = "عمر الحساب: "
+			showWarning("⚠️ الشخص المحدد لقد خرج من السيرفر")
+		end
+	end)
+
+	local bagCard = addCard(pTarget, 50)
+	local bagEnabled = false
+	addTargetToggle(bagCard, "حقيبة ظهر", function(state)
+		if state and (targetBox.Text == "" or not selectedTargetPlayer) then
+			showWarning("⚠️ اكتب اسم اللاعب أولاً!")
+			return
+		end
+		bagEnabled = state
+	end)
+
+	local tpCard = addCard(pTarget, 50)
+	create("TextLabel", tpCard, {
+		Size = UDim2.new(1, -95, 1, 0), Position = UDim2.new(0, 12, 0, 0),
+		BackgroundTransparency = 1, Font = Enum.Font.GothamBold, Text = "انتقال",
+		TextColor3 = Color3.fromRGB(255, 255, 255), TextSize = 14, TextXAlignment = Enum.TextXAlignment.Left
+	})
+	local tpBtnOnly = create("TextButton", tpCard, {
+		Size = UDim2.new(0, 85, 0, 32), Position = UDim2.new(1, -95, 0.5, -16),
+		BackgroundColor3 = currentThemeColor, Font = Enum.Font.GothamBold, Text = "انتقال",
+		TextColor3 = Color3.fromRGB(255, 255, 255), TextSize = 14
+	})
+	create("UICorner", tpBtnOnly, {CornerRadius = UDim.new(0, 8)})
+
+	tpBtnOnly.MouseButton1Click:Connect(function()
+		if selectedTargetPlayer and selectedTargetPlayer.Character and selectedTargetPlayer.Character:FindFirstChild("HumanoidRootPart") then
+			if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+				player.Character.HumanoidRootPart.CFrame = selectedTargetPlayer.Character.HumanoidRootPart.CFrame + Vector3.new(0, 3, 0)
+				showWarning("🚀 تم الانتقال بنجاح!")
+			end
+		else
+			showWarning("⚠️ اختر لاعباً صحيحاً أولاً!")
+		end
+	end)
+
+	local launchCard = addCard(pTarget, 50)
+	create("TextLabel", launchCard, {
+		Size = UDim2.new(1, -95, 1, 0), Position = UDim2.new(0, 12, 0, 0),
+		BackgroundTransparency = 1, Font = Enum.Font.GothamBold, Text = "فلنق",
+		TextColor3 = Color3.fromRGB(255, 255, 255), TextSize = 14, TextXAlignment = Enum.TextXAlignment.Left
+	})
+	local launchBtnOnly = create("TextButton", launchCard, {
+		Size = UDim2.new(0, 85, 0, 32), Position = UDim2.new(1, -95, 0.5, -16),
+		BackgroundColor3 = currentThemeColor, Font = Enum.Font.GothamBold, Text = "فلنق",
+		TextColor3 = Color3.fromRGB(255, 255, 255), TextSize = 14
+	})
+	create("UICorner", launchBtnOnly, {CornerRadius = UDim.new(0, 8)})
+
+	launchBtnOnly.MouseButton1Click:Connect(function()
+		if selectedTargetPlayer and selectedTargetPlayer.Character and selectedTargetPlayer.Character:FindFirstChild("HumanoidRootPart") then
+			local targetHrp = selectedTargetPlayer.Character.HumanoidRootPart
+			if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+				local myHrp = player.Character.HumanoidRootPart
+				local savedPos = myHrp.CFrame
+				
+				task.spawn(function()
+					local startTime = tick()
+					while tick() - startTime < 1.5 and targetHrp and targetHrp.Parent do
+						myHrp.CFrame = savedPos
+						myHrp.Velocity = Vector3.zero
+						myHrp.AssemblyLinearVelocity = Vector3.zero
+						
+						targetHrp.CFrame = targetHrp.CFrame * CFrame.Angles(math.rad(math.random(-360, 360)), math.rad(math.random(-360, 360)), math.rad(math.random(-360, 360)))
+						targetHrp.Velocity = Vector3.new(math.random(-900000, 900000), 1500000, math.random(-900000, 900000))
+						targetHrp.AssemblyLinearVelocity = Vector3.new(math.random(-900000, 900000), 1500000, math.random(-900000, 900000))
+						RunService.Stepped:Wait()
+					end
+					myHrp.CFrame = savedPos
+				end)
+			end
+			showWarning("🌪️ تم تطيير اللاعب بنجاح!")
+		else
+			showWarning("⚠️ اختر لاعباً صحيحاً أولاً!")
+		end
+	end)
+
+	RunService.RenderStepped:Connect(function()
+		if bagEnabled and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+			if selectedTargetPlayer and selectedTargetPlayer.Character and selectedTargetPlayer.Character:FindFirstChild("HumanoidRootPart") then
+				local foundTarget = selectedTargetPlayer.Character.HumanoidRootPart
+				local hrp = player.Character.HumanoidRootPart
+				local hum = player.Character:FindFirstChildOfClass("Humanoid")
+				hrp.CFrame = foundTarget.CFrame * CFrame.new(0, 0.2, 1.1) * CFrame.Angles(0, math.rad(180), 0)
+				hrp.Velocity = Vector3.zero
+				hrp.AssemblyLinearVelocity = Vector3.zero
+				if hum then hum.Sit = true end
+			else
+				bagEnabled = false
+			end
+		end
+	end)
+
+	-- صفحة Character
+	local flyCard = addCard(pChar, 120)
+	create("TextLabel", flyCard, {Size = UDim2.new(1, -20, 0, 26), Position = UDim2.new(0, 12, 0, 6), BackgroundTransparency = 1, Font = Enum.Font.GothamBold, Text = "نظام الطيران السريع (Fly)", TextColor3 = Color3.fromRGB(255, 255, 255), TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left})
+	local flyBtn = create("TextButton", flyCard, {Size = UDim2.new(0, 76, 0, 32), Position = UDim2.new(1, -86, 0, 6), BackgroundColor3 = currentBgColor, Font = Enum.Font.GothamBold, Text = "OFF", TextColor3 = Color3.fromRGB(255, 255, 255), TextSize = 14})
+	create("UICorner", flyBtn, {CornerRadius = UDim.new(0, 8)})
+	create("UIStroke", flyBtn, {Color = Color3.fromRGB(70, 80, 95), Thickness = 1.5})
+
+	create("TextLabel", flyCard, {Size = UDim2.new(0, 95, 0, 26), Position = UDim2.new(0, 12, 0, 42), BackgroundTransparency = 1, Font = Enum.Font.GothamBold, Text = "سرعة الطيران:", TextColor3 = Color3.fromRGB(255, 255, 255), TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left})
+	local flySpeedBox = create("TextBox", flyCard, {Size = UDim2.new(0, 100, 0, 28), Position = UDim2.new(0, 110, 0, 41), BackgroundColor3 = Color3.fromRGB(25, 32, 44), Font = Enum.Font.GothamBold, Text = "100", TextColor3 = Color3.fromRGB(255, 255, 255), TextSize = 13, TextXAlignment = Enum.TextXAlignment.Center, ClearTextOnFocus = false})
+	create("UICorner", flySpeedBox, {CornerRadius = UDim.new(0, 6)})
+	create("UIStroke", flySpeedBox, {Color = Color3.fromRGB(60, 70, 85), Thickness = 1})
+
+	local flySpeed = 100
+	flySpeedBox.FocusLost:Connect(function()
+		local num = tonumber(flySpeedBox.Text)
+		if num then
+			flySpeed = math.clamp(num, 10, 900)
+		else
+			flySpeedBox.Text = tostring(flySpeed)
+		end
+	end)
+
+	local upB = create("TextButton", flyCard, {Size = UDim2.new(0, 52, 0, 26), Position = UDim2.new(1, -118, 0, 80), BackgroundColor3 = Color3.fromRGB(25, 32, 44), Font = Enum.Font.GothamBold, Text = "إلى أعلى", TextColor3 = Color3.fromRGB(255, 255, 255), TextSize = 13})
+	create("UICorner", upB, {CornerRadius = UDim.new(0, 6)})
+	create("UIStroke", upB, {Color = Color3.fromRGB(70, 80, 95), Thickness = 1})
+
+	local downB = create("TextButton", flyCard, {Size = UDim2.new(0, 56, 0, 26), Position = UDim2.new(1, -60, 0, 80), BackgroundColor3 = Color3.fromRGB(25, 32, 44), Font = Enum.Font.GothamBold, Text = "إلى أسفل", TextColor3 = Color3.fromRGB(255, 255, 255), TextSize = 13})
+	create("UICorner", downB, {CornerRadius = UDim.new(0, 6)})
+	create("UIStroke", downB, {Color = Color3.fromRGB(70, 80, 95), Thickness = 1})
+
+	local flying, upPressed, downPressed = false, false, false
+	local bv, bg
+
+	local function updateFly(state)
+		flying = state
+		flyBtn.Text = state and "ON" or "OFF"
+		flyBtn.BackgroundColor3 = state and currentThemeColor or currentBgColor
+		local char = player.Character
+		if not char or not char:FindFirstChild("HumanoidRootPart") then return end
+		local hum = char:FindFirstChildOfClass("Humanoid")
+		if hum then hum.PlatformStand = state end
+		if state then
+			bv = create("BodyVelocity", char.HumanoidRootPart, {Name = "FlyV", MaxForce = Vector3.new(1e9, 1e9, 1e9), Velocity = Vector3.zero})
+			bg = create("BodyGyro", char.HumanoidRootPart, {Name = "FlyG", MaxTorque = Vector3.new(1e9, 1e9, 1e9), CFrame = char.HumanoidRootPart.CFrame})
+		else
+			if bv then bv:Destroy() end
+			if bg then bg:Destroy() end
+		end
+	end
+
+	flyBtn.MouseButton1Click:Connect(function() updateFly(not flying) end)
+	upB.MouseButton1Down:Connect(function() upPressed = true end) upB.MouseButton1Up:Connect(function() upPressed = false end)
+	downB.MouseButton1Down:Connect(function() downPressed = true end) downB.MouseButton1Up:Connect(function() downPressed = false end)
+
+	RunService.RenderStepped:Connect(function()
+		if flying and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+			local hrp = player.Character.HumanoidRootPart
+			local cam = workspace.CurrentCamera
+			if bv and bg then
+				bg.CFrame = cam.CFrame
+				local moveDir = Vector3.zero
+				pcall(function()
+					local moveInput = require(player.PlayerScripts.PlayerModule.ControlModule):GetMoveVector()
+					moveDir = (cam.CFrame.RightVector * moveInput.X) - (cam.CFrame.LookVector * moveInput.Z)
+				end)
+				if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + cam.CFrame.LookVector end
+				if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - cam.CFrame.LookVector end
+				if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - cam.CFrame.RightVector end
+				if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + cam.CFrame.RightVector end
+				if UserInputService:IsKeyDown(Enum.KeyCode.Space) or upPressed then moveDir = moveDir + Vector3.new(0, 1, 0) end
+				if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) or downPressed then moveDir = moveDir - Vector3.new(0, 1, 0) end
+				bv.Velocity = moveDir * flySpeed
+			end
+		end
+	end)
+
+	local speedCard = addCard(pChar, 72)
+	create("TextLabel", speedCard, {Size = UDim2.new(0, 95, 0, 30), Position = UDim2.new(0, 12, 0, 20), BackgroundTransparency = 1, Font = Enum.Font.GothamBold, Text = "سرعة اللاعب:", TextColor3 = Color3.fromRGB(255, 255, 255), TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left})
+	local speedBox = create("TextBox", speedCard, {Size = UDim2.new(0, 110, 0, 30), Position = UDim2.new(0, 105, 0, 20), BackgroundColor3 = Color3.fromRGB(25, 32, 44), Font = Enum.Font.GothamBold, Text = "16", TextColor3 = Color3.fromRGB(255, 255, 255), TextSize = 13, TextXAlignment = Enum.TextXAlignment.Center, ClearTextOnFocus = false})
+	create("UICorner", speedBox, {CornerRadius = UDim.new(0, 6)})
+	create("UIStroke", speedBox, {Color = Color3.fromRGB(60, 70, 85), Thickness = 1})
+
+	speedBox.FocusLost:Connect(function()
+		local num = tonumber(speedBox.Text)
+		if num then
+			if num > 2500 then
+				num = 2500
+				speedBox.Text = "2500"
+				showWarning("⚠️ حد أقصى سرعة اللاعب هي 2500")
+			end
+			if player.Character and player.Character:FindFirstChildOfClass("Humanoid") then
+				player.Character:FindFirstChildOfClass("Humanoid").WalkSpeed = num
+			end
+		else
+			speedBox.Text = "16"
+		end
+	end)
+
+	addToggle(addCard(pChar, 44), "تخطي الجدران (Noclip)", function(state)
+		task.spawn(function()
+			while state and player.Character do
+				for _, p in pairs(player.Character:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide = false end end
+				RunService.Stepped:Wait()
+			end
+		end)
+	end)
+
+	addToggle(addCard(pChar, 44), "قفز لا نهائي (Infinite Jump)", function(state)
+		UserInputService.JumpRequest:Connect(function()
+			if state and player.Character then
+				local hum = player.Character:FindFirstChildOfClass("Humanoid")
+				if hum then hum:ChangeState(Enum.HumanoidStateType.Jumping) end
+			end
+		end)
+	end)
+
+	-- صفحة Misc (تم تحديث الـ ESP هنا ليطابق لون التيم + أيقونة السكن الكبيرة + المتر)
+	local espEnabled = false
+	local espCache = {}
+	addToggle(addCard(pMisc, 44), "كشف الأماكن (ESP)", function(state)
+		espEnabled = state
+		if not state then
+			for _, data in pairs(espCache) do
+				if data.box then data.box:Destroy() end
+				if data.billboard then data.billboard:Destroy() end
+			end
+			espCache = {}
+		end
+	end)
+
+	local aimbotEnabled = false
+	addToggle(addCard(pMisc, 44), "الإيم بوت الذكي", function(state) aimbotEnabled = state end)
+
+	local fovRadiusVal = 150
+	addToggle(addCard(pMisc, 44), "إظهار دائرة التصويب", function(state) fovGuiHolder.Visible = state end)
+
+	local sliderCard = addCard(pMisc, 70)
+	create("TextLabel", sliderCard, {
+		Size = UDim2.new(1, -20, 0, 22), Position = UDim2.new(0, 12, 0, 8),
+		BackgroundTransparency = 1, Font = Enum.Font.GothamBold, Text = "حجم نطاق دائرة التصويب",
+		TextColor3 = Color3.fromRGB(255, 255, 255), TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left
+	})
+	
+	local valLbl = create("TextLabel", sliderCard, {
+		Size = UDim2.new(0, 100, 0, 22), Position = UDim2.new(1, -112, 0, 8),
+		BackgroundTransparency = 1, Font = Enum.Font.GothamBold, Text = "150/400",
+		TextColor3 = Color3.fromRGB(255, 255, 255), TextSize = 12, TextXAlignment = Enum.TextXAlignment.Right
+	})
+	
+	local bgBar = create("Frame", sliderCard, {
+		Size = UDim2.new(1, -24, 0, 18), Position = UDim2.new(0, 12, 0, 38),
+		BackgroundColor3 = Color3.fromRGB(25, 32, 44)
+	})
+	create("UICorner", bgBar, {CornerRadius = UDim.new(0, 8)})
+	create("UIStroke", bgBar, {Color = Color3.fromRGB(60, 70, 85), Thickness = 1})
+	
+	local fillBar = create("Frame", bgBar, {
+		Size = UDim2.new((150 - 30)/(400 - 30), 0, 1, 0), Position = UDim2.new(0, 0, 0, 0),
+		BackgroundColor3 = currentThemeColor
+	})
+	create("UICorner", fillBar, {CornerRadius = UDim.new(0, 8)})
+	
+	local btnHit = create("TextButton", bgBar, {
+		Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, Text = "", ZIndex = 5
+	})
+	
+	local function updateSlider(input)
+		local pos = math.clamp((input.Position.X - bgBar.AbsolutePosition.X) / bgBar.AbsoluteSize.X, 0, 1)
+		local val = math.floor(30 + (400 - 30) * pos)
+		fillBar.Size = UDim2.new(pos, 0, 1, 0)
+		valLbl.Text = val .. "/400"
+		fovRadiusVal = val
+		fovGuiHolder.Size = UDim2.new(0, val * 2, 0, val * 2)
+		fovGuiHolder.Position = UDim2.new(0.5, -val, 0.5, -val)
+	end
+	
+	local dragging = false
+	btnHit.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = true
+			updateSlider(input)
+		end
+	end)
+	UserInputService.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = false
+		end
+	end)
+	UserInputService.InputChanged:Connect(function(input)
+		if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+			updateSlider(input)
+		end
+	end)
+
+	local fovCamCard = addCard(pMisc, 70)
+	create("TextLabel", fovCamCard, {
+		Size = UDim2.new(1, -20, 0, 22), Position = UDim2.new(0, 12, 0, 8),
+		BackgroundTransparency = 1, Font = Enum.Font.GothamBold, Text = "توسيع منظور الكاميرا (FOV)",
+		TextColor3 = Color3.fromRGB(255, 255, 255), TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left
+	})
+	
+	local fovValLbl = create("TextLabel", fovCamCard, {
+		Size = UDim2.new(0, 100, 0, 22), Position = UDim2.new(1, -112, 0, 8),
+		BackgroundTransparency = 1, Font = Enum.Font.GothamBold, Text = "70/120",
+		TextColor3 = Color3.fromRGB(255, 255, 255), TextSize = 12, TextXAlignment = Enum.TextXAlignment.Right
+	})
+	
+	local fovBgBar = create("Frame", fovCamCard, {
+		Size = UDim2.new(1, -24, 0, 18), Position = UDim2.new(0, 12, 0, 38),
+		BackgroundColor3 = Color3.fromRGB(25, 32, 44)
+	})
+	create("UICorner", fovBgBar, {CornerRadius = UDim.new(0, 8)})
+	create("UIStroke", fovBgBar, {Color = Color3.fromRGB(60, 70, 85), Thickness = 1})
+	
+	local fovFillBar = create("Frame", fovBgBar, {
+		Size = UDim2.new((70 - 20)/(120 - 20), 0, 1, 0), Position = UDim2.new(0, 0, 0, 0),
+		BackgroundColor3 = currentThemeColor
+	})
+	create("UICorner", fovFillBar, {CornerRadius = UDim.new(0, 8)})
+	
+	local fovBtnHit = create("TextButton", fovBgBar, {
+		Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, Text = "", ZIndex = 5
+	})
+	
+	local function updateFovSlider(input)
+		local pos = math.clamp((input.Position.X - fovBgBar.AbsolutePosition.X) / fovBgBar.AbsoluteSize.X, 0, 1)
+		local val = math.floor(20 + (120 - 20) * pos)
+		fovFillBar.Size = UDim2.new(pos, 0, 1, 0)
+		fovValLbl.Text = val .. "/120"
+		Camera.FieldOfView = val
+	end
+	
+	local fovDragging = false
+	fovBtnHit.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			fovDragging = true
+			updateFovSlider(input)
+		end
+	end)
+	UserInputService.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			fovDragging = false
+		end
+	end)
+	UserInputService.InputChanged:Connect(function(input)
+		if fovDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+			updateFovSlider(input)
+		end
+	end)
+
+	RunService.RenderStepped:Connect(function()
+		if aimbotEnabled then
+			local closestPlayer = nil
+			local shortestDistance = fovRadiusVal
+			local screenCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+			
+			for _, p in pairs(Players:GetPlayers()) do
+				if p ~= player and p.Character and p.Character:FindFirstChild("Head") and p.Character:FindFirstChild("Humanoid") then
+					local hum = p.Character.Humanoid
+					if hum.Health > 0 then
+						local head = p.Character.Head
+						local screenPoint, onScreen = Camera:WorldToViewportPoint(head.Position)
+						if onScreen then
+							local screenPos2D = Vector2.new(screenPoint.X, screenPoint.Y)
+							local dist = (screenPos2D - screenCenter).Magnitude
+							if dist <= fovRadiusVal and dist < shortestDistance then
+								shortestDistance = dist
+								closestPlayer = p
+							end
+						end
+					end
+				end
+			end
+			
+			if closestPlayer and closestPlayer.Character and closestPlayer.Character:FindFirstChild("Head") then
+				local hum = closestPlayer.Character:FindFirstChildOfClass("Humanoid")
+				if hum and hum.Health > 0 then
+					Camera.CFrame = CFrame.new(Camera.CFrame.Position, closestPlayer.Character.Head.Position)
+				end
+			end
+		end
+	end)
+
+	-- نظام الـ ESP المطور (لون التيم + أيقونة السكن الكبيرة فوق الرأس + المسافة بالمتار والدم)
+	RunService.RenderStepped:Connect(function()
+		if espEnabled then
+			for _, p in pairs(Players:GetPlayers()) do
+				if p ~= player and p.Character and p.Character:FindFirstChild("Humanoid") and p.Character:FindFirstChild("HumanoidRootPart") then
+					local char = p.Character
+					local hrp = char.HumanoidRootPart
+					local hum = char.Humanoid
+					local myHrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+					
+					-- جلب لون التيم الحقيقي للاعب
+					local teamColor = Color3.fromRGB(255, 255, 255)
+					if p.Team and p.Team.TeamColor then
+						teamColor = p.Team.TeamColor.Color
+					end
+
+					if not espCache[p] then
+						local highlight = Instance.new("Highlight")
+						highlight.Adornee = char
+						highlight.FillTransparency = 1
+						highlight.OutlineColor = teamColor
+						highlight.Parent = char
+
+						local billboard = Instance.new("BillboardGui")
+						billboard.Adornee = char:FindFirstChild("Head") or hrp
+						billboard.Size = UDim2.new(0, 140, 0, 90)
+						billboard.StudsOffset = Vector3.new(0, 3.2, 0)
+						billboard.AlwaysOnTop = true
+
+						-- أيقونة السكن (صورة الوجه/الرأس) كبيرة فوق رأس اللاعب
+						local avatarImg = Instance.new("ImageLabel", billboard)
+						avatarImg.Size = UDim2.new(0, 45, 0, 45)
+						avatarImg.Position = UDim2.new(0.5, -22, 0, 0)
+						avatarImg.BackgroundTransparency = 1
+						avatarImg.Image = Players:GetUserThumbnailAsync(p.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size420x420)
+						Instance.new("UICorner", avatarImg, {CornerRadius = UDim.new(1, 0)})
+						local imgStroke = Instance.new("UIStroke", avatarImg)
+						imgStroke.Color = teamColor
+						imgStroke.Thickness = 1.5
+
+						local textLabel = Instance.new("TextLabel", billboard)
+						textLabel.Size = UDim2.new(1, 0, 0, 40)
+						textLabel.Position = UDim2.new(0, 0, 0, 48)
+						textLabel.BackgroundTransparency = 1
+						textLabel.Font = Enum.Font.GothamBold
+						textLabel.TextSize = 12
+						textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+						textLabel.TextStrokeTransparency = 0
+
+						billboard.Parent = char
+						espCache[p] = {box = highlight, billboard = billboard, text = textLabel, imgStroke = imgStroke}
+					else
+						local data = espCache[p]
+						if data.box then data.box.OutlineColor = teamColor end
+						if data.imgStroke then data.imgStroke.Color = teamColor end
+						
+						if data.text and myHrp then
+							local dist = math.floor((hrp.Position - myHrp.Position).Magnitude)
+							local hp = math.floor(hum.Health)
+							local maxHp = math.floor(hum.MaxHealth)
+							
+							if hp <= 0 then
+								data.text.Text = p.Name .. "\n[ميت]"
+							else
+								data.text.Text = p.Name .. "\n[دم: " .. hp .. "/" .. maxHp .. "] - [" .. dist .. "م]"
+							end
+						end
+					end
+				end
+			end
+		else
+			for p, data in pairs(espCache) do
+				if data.box then data.box:Destroy() end
+				if data.billboard then data.billboard:Destroy() end
+				espCache[p] = nil
+			end
+		end
+	end)
+
+	-- صفحة Settings
+	local themeButtons = {}
+
+	local function addBrandToggle(title, themeCol, bgCol, cardCol)
+		local card = addCard(pSettings, 48)
+		create("TextLabel", card, {
+			Size = UDim2.new(1, -95, 1, 0), Position = UDim2.new(0, 12, 0, 0),
+			BackgroundTransparency = 1, Font = Enum.Font.GothamBold, Text = title,
+			TextColor3 = Color3.fromRGB(255, 255, 255), TextSize = 14, TextXAlignment = Enum.TextXAlignment.Left
+		})
+		
+		local btn = create("TextButton", card, {
+			Size = UDim2.new(0, 76, 0, 32), Position = UDim2.new(1, -86, 0.5, -16),
+			BackgroundColor3 = Color3.fromRGB(25, 32, 44), Font = Enum.Font.GothamBold, Text = "OFF",
+			TextColor3 = Color3.fromRGB(255, 255, 255), TextSize = 14
+		})
+		create("UICorner", btn, {CornerRadius = UDim.new(0, 8)})
+		local btnStroke = create("UIStroke", btn, {Color = Color3.fromRGB(70, 80, 95), Thickness = 1.5})
+		
+		table.insert(themeButtons, {button = btn, stroke = btnStroke, tCol = themeCol, bCol = bgCol, cCol = cardCol})
+		
+		btn.MouseButton1Click:Connect(function()
+			for _, item in pairs(themeButtons) do
+				item.button.Text = "OFF"
+				item.button.BackgroundColor3 = Color3.fromRGB(25, 32, 44)
+				item.stroke.Color = Color3.fromRGB(70, 80, 95)
+			end
+			btn.Text = "ON"
+			btn.BackgroundColor3 = themeCol
+			btnStroke.Color = Color3.fromRGB(255, 255, 255)
+			
+			currentThemeColor = themeCol
+			currentBgColor = bgCol
+			currentCardColor = cardCol
+			mainStroke.Color = themeCol
+			openStroke.Color = themeCol
+		end)
+	end
+
+	create("TextLabel", pSettings, {
+		Size = UDim2.new(1, -10, 0, 24), BackgroundTransparency = 1,
+		Font = Enum.Font.GothamBold, Text = "اختر ثيم الماركة", TextColor3 = Color3.fromRGB(255, 255, 255),
+		TextSize = 14, TextXAlignment = Enum.TextXAlignment.Left
+	})
+
+	addBrandToggle("🟢 ثيم مونستر", Color3.fromRGB(0, 255, 65), Color3.fromRGB(8, 14, 10), Color3.fromRGB(14, 22, 17))
+	addBrandToggle("🔵 ثيم ريد بول", Color3.fromRGB(0, 120, 255), Color3.fromRGB(8, 12, 18), Color3.fromRGB(14, 20, 30))
+	addBrandToggle("🔴 ثيم فراولة", Color3.fromRGB(255, 40, 60), Color3.fromRGB(16, 8, 10), Color3.fromRGB(26, 14, 17))
+	addBrandToggle("🟡 ثيم برق ذهبي", Color3.fromRGB(255, 200, 0), Color3.fromRGB(16, 14, 8), Color3.fromRGB(26, 22, 12))
+	addBrandToggle("🟣 ثيم أرجواني", Color3.fromRGB(180, 50, 255), Color3.fromRGB(14, 8, 18), Color3.fromRGB(24, 14, 30))
+	addBrandToggle("⚪ ثيم أبيض نقي", Color3.fromRGB(240, 240, 240), Color3.fromRGB(20, 20, 20), Color3.fromRGB(32, 32, 32))
+end
+
+if checkSavedKey() then
+	launchMainScript()
+	return
+end
+
+-- ==================== بناء واجهة إدخال المفتاح (مكبرة وواضحة جداً) ====================
+local keyGui = Instance.new("ScreenGui", CoreGui)
+keyGui.Name = "SnteroKeyGUI"
+keyGui.ResetOnSpawn = false
+keyGui.IgnoreGuiInset = true
+
+local function createKeyElem(class, parent, props)
+	local inst = Instance.new(class)
+	for k, v in pairs(props) do inst[k] = v end
+	inst.Parent = parent
+	return inst
+end
+
+-- تكبير حجم نافذة المفتاح الرئيسية
+local keyFrame = createKeyElem("Frame", keyGui, {
+	Size = UDim2.new(0, 500, 0, 310), Position = UDim2.new(0.5, -250, 0.5, -155),
+	BackgroundColor3 = currentBgColor, Active = true, Draggable = true
+})
+createKeyElem("UICorner", keyFrame, {CornerRadius = UDim.new(0, 14)})
+createKeyElem("UIStroke", keyFrame, {Color = currentThemeColor, Thickness = 2.5})
+
+createKeyElem("TextLabel", keyFrame, {
+	Size = UDim2.new(1, 0, 0, 45), Position = UDim2.new(0, 0, 0, 10),
+	BackgroundTransparency = 1, Font = Enum.Font.GothamBold, Text = "Sntero Script - Key System",
+	TextColor3 = Color3.fromRGB(255, 255, 255), TextSize = 18, TextXAlignment = Enum.TextXAlignment.Center
+})
+
+-- تكبير كتابة المفتاح لتكون واضحة جداً للمستخدم
+createKeyElem("TextLabel", keyFrame, {
+	Size = UDim2.new(0.9, 0, 0, 40), Position = UDim2.new(0.05, 0, 0, 55),
+	BackgroundTransparency = 1, Font = Enum.Font.GothamBold, Text = "المفتاح المطلوب هو: sntero55",
+	TextColor3 = Color3.fromRGB(0, 255, 65), TextSize = 20, TextXAlignment = Enum.TextXAlignment.Center
+})
+
+local keyBox = createKeyElem("TextBox", keyFrame, {
+	Size = UDim2.new(0.85, 0, 0, 50), Position = UDim2.new(0.075, 0, 0, 105),
+	BackgroundColor3 = Color3.fromRGB(25, 32, 44), Font = Enum.Font.GothamBold,
+	PlaceholderText = "اكتب المفتاح هنا...", Text = "", TextColor3 = Color3.fromRGB(255, 255, 255),
+	TextSize = 16, TextXAlignment = Enum.TextXAlignment.Center, ClearTextOnFocus = false
+})
+createKeyElem("UICorner", keyBox, {CornerRadius = UDim.new(0, 10)})
+createKeyElem("UIStroke", keyBox, {Color = currentThemeColor, Thickness = 2})
+
+local submitBtn = createKeyElem("TextButton", keyFrame, {
+	Size = UDim2.new(0.85, 0, 0, 48), Position = UDim2.new(0.075, 0, 0, 170),
+	BackgroundColor3 = currentThemeColor, Font = Enum.Font.GothamBold, Text = "تحقق من المفتاح",
+	TextColor3 = Color3.fromRGB(12, 16, 22), TextSize = 16
+})
+createKeyElem("UICorner", submitBtn, {CornerRadius = UDim.new(0, 10)})
+
+local statusLbl = createKeyElem("TextLabel", keyFrame, {
+	Size = UDim2.new(1, 0, 0, 32), Position = UDim2.new(0, 0, 0, 235),
+	BackgroundTransparency = 1, Font = Enum.Font.GothamBold, Text = "",
+	TextColor3 = Color3.fromRGB(255, 60, 60), TextSize = 14, TextXAlignment = Enum.TextXAlignment.Center
+})
+
+local correctKey = "sntero55"
+
+submitBtn.MouseButton1Click:Connect(function()
+	local userInput = string.lower(string.gsub(keyBox.Text, "%s+", ""))
+	
+	if userInput == correctKey then
+		statusLbl.TextColor3 = Color3.fromRGB(0, 255, 65)
+		statusLbl.Text = "تم التحقق بنجاح! جاري فتح السكربت..."
+		
+		saveKeySession()
+		
+		task.wait(1)
+		keyGui:Destroy()
+		launchMainScript()
+	else
+		statusLbl.TextColor3 = Color3.fromRGB(255, 60, 60)
+		statusLbl.Text = "المفتاح غير صحيح، حاول مرة أخرى!"
+	end
+end)
+
